@@ -290,7 +290,7 @@ async function updateRankingUI(rankingsData) {
                                 <tr>
                                     <td>${isNonMember ? '-' : realRank}</td>
                                     <td>${player.name}</td>
-                                    <td>${player.count}</td>
+                                    <td>${isNonMember ? '0' : player.count}</td>
                                 </tr>
                             `;
                         }).join('')}
@@ -373,8 +373,14 @@ const LEADERBOARD_POINTS = {
     }
 };
 
-function calculateLeaderboardPoints(totalsByCategory) {
+function calculateLeaderboardPoints(totalsByCategory, searchTerm, isNonMember) {
     const playerPoints = {};
+
+    // If it's a non-member and a search term, return 0 points
+    if (isNonMember && searchTerm) {
+        playerPoints[searchTerm] = 0;
+        return playerPoints;
+    }
 
     Object.entries(totalsByCategory).forEach(([category, playerTotals]) => {
         const categoryTitle = {
@@ -444,7 +450,7 @@ function updateTotalsUI(totalsByCategory, rankingsData) {
             return {
                 rank: isNonMember ? '-' : realRank,
                 name,
-                count
+                count: isNonMember ? 0 : count
             };
         });
 
@@ -642,7 +648,7 @@ async function showRanking() {
         updateTotalsUI(totalsByCategory, rankingsData);
         
         // Calculate and update the Leaderboard
-        const playerPoints = calculateLeaderboardPoints(totalsByCategory);
+        const playerPoints = calculateLeaderboardPoints(totalsByCategory, rankingsData.searchTerm, rankingsData.isNonMember);
         updateLeaderboardUI(playerPoints, rankingsData);
         
         initializeAllCategoryToggles();
