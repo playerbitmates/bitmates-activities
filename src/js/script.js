@@ -66,7 +66,7 @@ async function fetchAllPlayers() {
 
     while (hasMorePlayers) {
         try {
-            const response = await fetch(`https://bitmatemediator.net/game/v1/killstats?valueid=2&time=monthly&page=${page}`);
+            const response = await fetch(`https://bitmatemediator.net/game/v1/killstats?valueid=2&time=monthly&page=${page}&_=${Date.now()}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -125,15 +125,8 @@ async function generateRanking(timePeriod = 'all_time') {
         if (searchTerm) {
             const player = await fetchPlayerBySearch(searchTerm);
             if (player) {
-                isNonMember = !activePlayers.some(member => 
-                    member.name.toLowerCase() === player.name.toLowerCase()
-                );
-                
-                if (isNonMember) {
-                    players = [{ name: player.name }];
-                } else {
-                    players = activePlayers;
-                }
+                isNonMember = !activePlayers.some(member => member.name === player.name);
+                players = isNonMember ? [{ name: player.name }] : activePlayers;
             } else {
                 throw new Error('Player not found');
             }
@@ -141,25 +134,13 @@ async function generateRanking(timePeriod = 'all_time') {
             players = activePlayers;
         }
 
-        // Process players in controlled batches
-        const chunkSize = 5;
-        const playerData = [];
-        const processedPlayers = new Set();
-        
-        for (let i = 0; i < players.length; i += chunkSize) {
-            const chunk = players.slice(i, i + chunkSize);
-            const chunkData = await Promise.all(
-                chunk.map(async player => {
-                    const normalizedName = player.name.toLowerCase();
-                    if (processedPlayers.has(normalizedName)) {
-                        return null;
-                    }
-                    processedPlayers.add(normalizedName);
-                    return fetchPlayerData(player.name);
-                })
-            );
-            playerData.push(...chunkData.filter(data => data !== null));
-        }
+        // Fetching player data
+        const playerData = await Promise.all(
+            players.map(player => fetchPlayerData(player.name))
+        );
+
+        // Filtering only valid player data
+        const validPlayerData = playerData.filter(data => data !== null);
 
         const categories = ['gathered', 'crafted', 'rewarded', 'kills'];
         const rankings = {};
@@ -167,7 +148,7 @@ async function generateRanking(timePeriod = 'all_time') {
         categories.forEach(category => {
             rankings[category] = {};
             
-            playerData.forEach(player => {
+            validPlayerData.forEach(player => {
                 if (!player) return;
                 
                 let categoryData;
@@ -193,7 +174,7 @@ async function generateRanking(timePeriod = 'all_time') {
                         }
 
                         const existingPlayer = rankings[category][itemId]
-                            .find(p => p.name.toLowerCase() === player.name.toLowerCase());
+                            .find(p => p.name === player.name);
                             
                         if (!existingPlayer) {
                             rankings[category][itemId].push({
@@ -216,7 +197,7 @@ async function generateRanking(timePeriod = 'all_time') {
         return { 
             rankings, 
             isNonMember,
-            searchTerm: searchTerm ? searchTerm.toLowerCase() : null 
+            searchTerm: searchTerm ? searchTerm : null 
         };
     } catch (error) {
         console.error('Error generating rankings:', error);
@@ -291,7 +272,7 @@ async function updateRankingUI(rankingsData) {
             let displayRankings = playerRankings;
             if (searchTerm && !isNonMember) {
                 displayRankings = playerRankings.filter(player => 
-                    player.name.toLowerCase() === searchTerm
+                    player.name === searchTerm
                 );
             }
 
@@ -454,7 +435,7 @@ function updateTotalsUI(totalsByCategory, rankingsData) {
         let displayPlayers = sortedPlayers;
         if (searchTerm && !isNonMember) {
             displayPlayers = sortedPlayers.filter(([name]) => 
-                name.toLowerCase() === searchTerm
+                name === searchTerm
             );
         }
 
@@ -530,7 +511,7 @@ function updateLeaderboardUI(playerPoints, rankingsData) {
     const container = document.getElementById('leaderboard-container');
     container.innerHTML = '';
 
-    // Adicionar explicação do sistema de pontuação
+    // Adding the points system explanation
     const pointsExplanation = document.createElement('div');
     pointsExplanation.className = 'item-ranking';
     pointsExplanation.innerHTML = `
@@ -578,7 +559,7 @@ function updateLeaderboardUI(playerPoints, rankingsData) {
     `;
     container.appendChild(pointsExplanation);
 
-    // Ranking atual
+    // Current ranking
     let sortedPlayers = Object.entries(playerPoints)
         .sort(([, a], [, b]) => b - a)
         .map(([name, points], index) => ({
@@ -589,7 +570,7 @@ function updateLeaderboardUI(playerPoints, rankingsData) {
 
     if (searchTerm && !isNonMember) {
         sortedPlayers = sortedPlayers.filter(player => 
-            player.name.toLowerCase() === searchTerm
+            player.name === searchTerm
         );
     }
 
