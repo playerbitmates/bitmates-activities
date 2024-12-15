@@ -375,13 +375,25 @@ const LEADERBOARD_POINTS = {
 
 function calculateLeaderboardPoints(totalsByCategory, searchTerm, isNonMember) {
     const playerPoints = {};
+    const playerTotalSums = {}; // To store total sum for each player
 
-    // If it's a non-member and a search term, return 0 points
+    // If it's a non-member and there's a search term, return 0 points
     if (isNonMember && searchTerm) {
-        playerPoints[searchTerm] = 0;
+        playerPoints[searchTerm] = { points: 0, totalSum: 0 };
         return playerPoints;
     }
 
+    // First, calculate total sum for each player
+    Object.entries(totalsByCategory).forEach(([category, playerTotals]) => {
+        Object.entries(playerTotals).forEach(([playerName, total]) => {
+            if (!playerTotalSums[playerName]) {
+                playerTotalSums[playerName] = 0;
+            }
+            playerTotalSums[playerName] += total;
+        });
+    });
+
+    // Then, calculate the points
     Object.entries(totalsByCategory).forEach(([category, playerTotals]) => {
         const categoryTitle = {
             'gathered': 'Total Gathered',
@@ -399,20 +411,36 @@ function calculateLeaderboardPoints(totalsByCategory, searchTerm, isNonMember) {
 
         sortedPlayers.forEach(([playerName], index) => {
             const rank = index + 1;
-            if (!playerPoints[playerName]) playerPoints[playerName] = 0;
+            if (!playerPoints[playerName]) {
+                playerPoints[playerName] = {
+                    points: 0,
+                    totalSum: playerTotalSums[playerName]
+                };
+            }
 
             const pointsConfig = LEADERBOARD_POINTS[categoryTitle];
             if (rank <= 3) {
-                playerPoints[playerName] += pointsConfig["1-3"];
+                playerPoints[playerName].points += pointsConfig["1-3"];
             } else if (rank <= 10) {
-                playerPoints[playerName] += pointsConfig["4-10"];
+                playerPoints[playerName].points += pointsConfig["4-10"];
             } else if (rank <= 20) {
-                playerPoints[playerName] += pointsConfig["11-20"];
+                playerPoints[playerName].points += pointsConfig["11-20"];
             }
         });
     });
 
-    return playerPoints;
+    // Sort players considering points and total sum
+    return Object.fromEntries(
+        Object.entries(playerPoints)
+            .sort(([, a], [, b]) => {
+                if (a.points !== b.points) {
+                    return b.points - a.points;
+                }
+                // If points are equal, use total sum as tiebreaker
+                return b.totalSum - a.totalSum;
+            })
+            .map(([name, data]) => [name, data.points])
+    );
 }
 
 function updateTotalsUI(totalsByCategory, rankingsData) {
